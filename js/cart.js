@@ -1,9 +1,6 @@
-/* Корзина. Всё хранится в localStorage. */
-
 const CART_KEY = "gamecard_cart";
 
-/* ---------- чтение и запись ---------- */
-
+/* Читает корзину из localStorage. Если её нет — возвращает пустой объект. */
 function getCart() {
 	const text = localStorage.getItem(CART_KEY);
 	if (!text) {
@@ -12,12 +9,13 @@ function getCart() {
 	return JSON.parse(text);
 }
 
+/* Записывает корзину в localStorage. */
 function saveCart(cart) {
-	localStorage.setItem(CART_KEY, JSON.stringify(cart));
+	const text = JSON.stringify(cart);
+	localStorage.setItem(CART_KEY, text);
 }
 
-/* ---------- действия с корзиной ---------- */
-
+/* Добавляет товар по id. Если уже был — увеличивает количество на 1. */
 function addToCart(id) {
 	const cart = getCart();
 	if (cart[id]) {
@@ -29,6 +27,7 @@ function addToCart(id) {
 	alert("Товар добавлен в корзину");
 }
 
+/* Меняет количество товара на +1 или -1. Если стало 0 — удаляет товар. */
 function changeQuantity(id, delta) {
 	const cart = getCart();
 	cart[id] = cart[id] + delta;
@@ -38,18 +37,19 @@ function changeQuantity(id, delta) {
 	saveCart(cart);
 }
 
+/* Удаляет товар по id. */
 function removeFromCart(id) {
 	const cart = getCart();
 	delete cart[id];
 	saveCart(cart);
 }
 
+/* Полностью очищает корзину. */
 function clearCart() {
 	saveCart({});
 }
 
-/* ---------- вспомогательные ---------- */
-
+/* Ищет товар по id в массиве products из data.js. */
 function findProduct(id) {
 	for (let i = 0; i < products.length; i++) {
 		if (products[i].id === id) {
@@ -59,12 +59,12 @@ function findProduct(id) {
 	return null;
 }
 
+/* Превращает число в строку вида «1 190 ₽». */
 function formatPrice(value) {
 	return value.toLocaleString("ru-RU") + " ₽";
 }
 
-/* ---------- вывод корзины на cart.html ---------- */
-
+/* Собирает список позиций корзины: товар, количество, сумма. */
 function cartItems() {
 	const cart = getCart();
 	const items = [];
@@ -81,6 +81,7 @@ function cartItems() {
 	return items;
 }
 
+/* Считает общую сумму заказа. */
 function cartTotal() {
 	const items = cartItems();
 	let total = 0;
@@ -90,6 +91,29 @@ function cartTotal() {
 	return total;
 }
 
+/* Собирает HTML одной строки корзины. */
+function cartItemHtml(item) {
+	let html = '<li class="cart-item">';
+	html = html + '<img class="cart-item__image" src="' + item.product.image + '" alt="' + item.product.name + '">';
+	html = html + '<div class="cart-item__info">';
+	html = html + '<h3 class="cart-item__name">' + item.product.name + '</h3>';
+	html = html + '<p class="cart-item__meta">' + PLATFORMS[item.product.platform] +
+		' • ' + COUNTRIES[item.product.country] +
+		' • ' + item.product.nominal + '</p>';
+	html = html + '<p class="cart-item__price">' + formatPrice(item.product.price) + '</p>';
+	html = html + '</div>';
+	html = html + '<div class="cart-item__controls">';
+	html = html + '<button class="qty-button" type="button" onclick="minusClick(\'' + item.product.id + '\')">−</button>';
+	html = html + '<span>' + item.count + '</span>';
+	html = html + '<button class="qty-button" type="button" onclick="plusClick(\'' + item.product.id + '\')">+</button>';
+	html = html + '</div>';
+	html = html + '<p class="cart-item__sum">' + formatPrice(item.sum) + '</p>';
+	html = html + '<button class="cart-item__remove" type="button" onclick="deleteClick(\'' + item.product.id + '\')">Удалить</button>';
+	html = html + '</li>';
+	return html;
+}
+
+/* Рисует корзину на странице: список товаров, итог, сообщение о пустоте. */
 function renderCart() {
 	const list = document.getElementById("cartItems");
 	if (!list) {
@@ -117,29 +141,12 @@ function renderCart() {
 
 	let html = "";
 	for (let i = 0; i < items.length; i++) {
-		const item = items[i];
-
-		html += '<li class="cart-item">';
-		html += '<img class="cart-item__image" src="' + item.product.image + '" alt="' + item.product.name + '">';
-		html += '<div class="cart-item__info">';
-		html += '<h3 class="cart-item__name">' + item.product.name + '</h3>';
-		html += '<p class="cart-item__meta">' + PLATFORMS[item.product.platform] + ' • ' +
-			COUNTRIES[item.product.country] + ' • ' + item.product.nominal + '</p>';
-		html += '<p class="cart-item__price">' + formatPrice(item.product.price) + '</p>';
-		html += '</div>';
-		html += '<div class="cart-item__controls">';
-		html += '<button class="qty-button" type="button" onclick="minusClick(\'' + item.product.id + '\')">−</button>';
-		html += '<span>' + item.count + '</span>';
-		html += '<button class="qty-button" type="button" onclick="plusClick(\'' + item.product.id + '\')">+</button>';
-		html += '</div>';
-		html += '<p class="cart-item__sum">' + formatPrice(item.sum) + '</p>';
-		html += '<button class="cart-item__remove" type="button" onclick="deleteClick(\'' + item.product.id + '\')">Удалить</button>';
-		html += '</li>';
+		html = html + cartItemHtml(items[i]);
 	}
 	list.innerHTML = html;
 }
 
-/* маленькие обработчики для кнопок внутри корзины */
+/* Обработчики кнопок «−», «+» и «Удалить» внутри корзины. */
 function minusClick(id) {
 	changeQuantity(id, -1);
 	renderCart();
@@ -155,8 +162,7 @@ function deleteClick(id) {
 	renderCart();
 }
 
-/* ---------- форма заказа ---------- */
-
+/* Обрабатывает отправку формы заказа: очищает корзину и показывает сообщение. */
 function initOrderForm() {
 	const form = document.getElementById("orderForm");
 	if (!form) {
@@ -166,7 +172,7 @@ function initOrderForm() {
 	form.addEventListener("submit", function (event) {
 		event.preventDefault();
 
-		if (!form.checkValidity()) {
+		if (form.checkValidity() === false) {
 			form.reportValidity();
 			return;
 		}
@@ -185,8 +191,6 @@ function initOrderForm() {
 		form.reset();
 	});
 }
-
-/* ---------- запуск ---------- */
 
 renderCart();
 initOrderForm();
