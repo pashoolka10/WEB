@@ -45,3 +45,7 @@ function findProduct(id) {
 function formatPrice(value) {
 	return value.toLocaleString("ru-RU") + " ₽";
 }
+initAddButtons();
+initCartButtons();
+initOrderModal();
+renderCard();
