@@ -1,46 +1,19 @@
-/* Каталог: вывод товаров, «умный фильтр» и форма пополнения Steam.
-
-   Как работает «умный фильтр»: после каждого изменения мы по очереди
-   проверяем каждое значение фильтра. Если вместе с ним не остаётся
-   ни одного товара — чекбокс становится недоступным (серым).
-
-   Все настройки фильтра лежат в этом файле, поэтому каталог работает
-   с любой версией data.js: ему нужны только products и VALUE_TITLES. */
-
-/* ---------- настройки фильтра ---------- */
-
-/* Группы фильтра: характеристика товара и подпись блока.
-   Порядок в массиве = порядок блоков в панели. */
-const filterGroups = [
+const groups = [
 	{ key: "platform", title: "Платформа" },
 	{ key: "country", title: "Страна" },
 	{ key: "nominal", title: "Номинал" }
 ];
 
-/* Значения платформы пишем руками: у Steam товаров нет
-   (его пополняют по логину), но в фильтре он должен быть */
-const platformValues = ["playstation", "apple", "steam", "games"];
-
-/* Steam и самая большая цена для ползунка */
-const steamValue = "steam";
-const maxPriceLimit = 12000;
-
-/* ---------- состояние страницы ---------- */
-
-/* Что сейчас отмечено в фильтре */
 const selected = {
 	platform: [],
 	country: [],
 	nominal: []
 };
 
-/* Положение ползунка «Цена» и выбранная сортировка */
-let maxPrice = maxPriceLimit;
+let maxPrice = MAX_PRICE;
 let sortMode = "popular";
 
-/* ---------- вспомогательные функции ---------- */
-
-/* Красивая подпись значения: "playstation" -> "PlayStation" */
+/* Возвращает красивую подпись значения: "playstation" -> "PlayStation". */
 function valueTitle(value) {
 	if (VALUE_TITLES[value]) {
 		return VALUE_TITLES[value];
@@ -48,11 +21,10 @@ function valueTitle(value) {
 	return value;
 }
 
-/* Все значения характеристики, которые встречаются в товарах.
-   Для "country" это будут Индия, Турция, США, Канада и Россия. */
+/* Собирает все возможные значения характеристики из товаров. */
 function valuesOf(key) {
 	if (key === "platform") {
-		return platformValues;
+		return PLATFORM_VALUES;
 	}
 
 	const values = [];
@@ -65,7 +37,7 @@ function valuesOf(key) {
 	return values;
 }
 
-/* Подпись «12 товаров / 1 товар / 2 товара» */
+/* Склоняет слово «товар»: 1 товар, 2 товара, 12 товаров. */
 function productsTitle(count) {
 	const lastTwo = count % 100;
 	const last = count % 10;
@@ -78,26 +50,24 @@ function productsTitle(count) {
 			word = "товара";
 		}
 	}
-
 	return count + " " + word;
 }
 
-/* Подходит ли товар, если отмечены такие значения.
-   Массивы передаём в функцию, чтобы её же можно было спросить:
-   «а если отметить ещё вот это значение?» */
-function isSuitable(product, checkPlatforms, checkCountries, checkNominals) {
-	/* пустой массив = в этой группе ничего не отмечено, условие не мешает */
-	if (checkPlatforms.length > 0 && checkPlatforms.indexOf(product.platform) === -1) {
-		return false;
-	}
-	if (checkCountries.length > 0 && checkCountries.indexOf(product.country) === -1) {
-		return false;
-	}
-	if (checkNominals.length > 0 && checkNominals.indexOf(product.nominal) === -1) {
-		return false;
+/* Проверяет, подходит ли товар набору галочек и ползунку цены. */
+function isSuitable(product, check) {
+	for (let i = 0; i < groups.length; i++) {
+		const key = groups[i].key;
+		const selectedValues = check[key];
+
+		if (selectedValues.length === 0) {
+			continue;
+		}
+
+		if (selectedValues.indexOf(product[key]) === -1) {
+			return false;
+		}
 	}
 
-	/* цена не должна быть больше той, что выбрана ползунком */
 	if (product.price > maxPrice) {
 		return false;
 	}
@@ -105,12 +75,11 @@ function isSuitable(product, checkPlatforms, checkCountries, checkNominals) {
 	return true;
 }
 
-/* Товары, которые подходят фильтру, в нужном порядке */
+/* Возвращает список товаров, подходящих фильтру, в нужном порядке. */
 function filteredProducts() {
 	const result = [];
-
 	for (let i = 0; i < products.length; i++) {
-		if (isSuitable(products[i], selected.platform, selected.country, selected.nominal)) {
+		if (isSuitable(products[i], selected)) {
 			result.push(products[i]);
 		}
 	}
@@ -128,9 +97,7 @@ function filteredProducts() {
 	return result;
 }
 
-/* ---------- фильтр ---------- */
-
-/* Строим чекбоксы и ползунок цены */
+/* Строит панель фильтра: чекбоксы по группам и ползунок цены. */
 function renderFilters() {
 	const box = document.getElementById("filters");
 	if (!box) {
@@ -139,13 +106,13 @@ function renderFilters() {
 
 	let html = "";
 
-	for (let i = 0; i < filterGroups.length; i++) {
-		const group = filterGroups[i];
+	for (let i = 0; i < groups.length; i++) {
+		const group = groups[i];
 		const values = valuesOf(group.key);
 		const checkedValues = selected[group.key];
 
-		html += '<div class="filter-group">';
-		html += '<h3 class="filter-group__title">' + group.title + "</h3>";
+		html = html + '<div class="filter-group">';
+		html = html + '<h3 class="filter-group__title">' + group.title + '</h3>';
 
 		for (let j = 0; j < values.length; j++) {
 			const value = values[j];
@@ -155,84 +122,69 @@ function renderFilters() {
 				checked = " checked";
 			}
 
-			html += '<label class="checkbox">';
-			html += '<input type="checkbox" name="' + group.key + '" value="' + value + '"' + checked + ">";
-			html += "<span>" + valueTitle(value) + "</span>";
-			html += "</label>";
+			html = html + '<label class="checkbox">';
+			html = html + '<input type="checkbox" name="' + group.key + '" value="' + value + '"' + checked + '>';
+			html = html + '<span>' + valueTitle(value) + '</span>';
+			html = html + '</label>';
 		}
 
-		html += "</div>";
+		html = html + '</div>';
 	}
 
-	html += '<div class="filter-group">';
-	html += '<h3 class="filter-group__title">Цена, до <span id="priceValue">' + formatPrice(maxPrice) + "</span></h3>";
-	html += '<input class="range" type="range" id="priceRange" min="500" max="' + maxPriceLimit + '" step="100" value="' + maxPrice + '">';
-	html += "</div>";
+	html = html + '<div class="filter-group">';
+	html = html + '<h3 class="filter-group__title">Цена, до <span id="priceValue">' + formatPrice(maxPrice) + '</span></h3>';
+	html = html + '<input class="range" type="range" id="priceRange" min="500" max="' + MAX_PRICE + '" step="100" value="' + maxPrice + '">';
+	html = html + '</div>';
 
 	box.innerHTML = html;
 }
 
-/* Значения отмеченных галочек одной группы */
-function readChecked(name) {
-	const boxes = document.querySelectorAll('#filters input[name="' + name + '"]:checked');
-	const values = [];
-
-	for (let i = 0; i < boxes.length; i++) {
-		values.push(boxes[i].value);
-	}
-
-	return values;
-}
-
-/* Считываем галочки со страницы в объект selected */
+/* Читает отмеченные галочки со страницы в объект selected. */
 function collectFilters() {
-	selected.platform = readChecked("platform");
-	selected.country = readChecked("country");
-	selected.nominal = readChecked("nominal");
+	for (let i = 0; i < groups.length; i++) {
+		const key = groups[i].key;
+		const boxes = document.querySelectorAll('#filters input[name="' + key + '"]:checked');
+
+		const values = [];
+		for (let j = 0; j < boxes.length; j++) {
+			values.push(boxes[j].value);
+		}
+
+		selected[key] = values;
+	}
 }
 
-/* «Умный фильтр»: значения, которые дадут пустой список товаров,
-   становятся недоступными */
+/* Умный фильтр: выключает галочки, которые дадут пустой результат. */
 function updateAvailability() {
-	for (let i = 0; i < filterGroups.length; i++) {
-		const group = filterGroups[i];
+	for (let i = 0; i < groups.length; i++) {
+		const group = groups[i];
 		const boxes = document.querySelectorAll('#filters input[name="' + group.key + '"]');
 
 		for (let j = 0; j < boxes.length; j++) {
 			const box = boxes[j];
 
-			/* Проверяем так: в своей группе отметить только это значение,
-			   а в остальных оставить то, что уже отмечено */
-			let checkPlatforms = selected.platform;
-			let checkCountries = selected.country;
-			let checkNominals = selected.nominal;
-
-			if (group.key === "platform") {
-				checkPlatforms = [box.value];
-			}
-			if (group.key === "country") {
-				checkCountries = [box.value];
-			}
-			if (group.key === "nominal") {
-				checkNominals = [box.value];
-			}
+			const test = {
+				platform: selected.platform.slice(),
+				country: selected.country.slice(),
+				nominal: selected.nominal.slice()
+			};
+			test[group.key] = [box.value];
 
 			let hasResult = false;
 			for (let k = 0; k < products.length; k++) {
-				if (isSuitable(products[k], checkPlatforms, checkCountries, checkNominals)) {
+				if (isSuitable(products[k], test)) {
 					hasResult = true;
 				}
 			}
 
-			/* Steam оставляем доступным всегда: его пополняют по логину,
-			   карт пополнения у него нет */
 			let isSteam = false;
-			if (group.key === "platform" && box.value === steamValue) {
+			if (group.key === "platform" && box.value === "steam") {
 				isSteam = true;
 			}
 
-			/* уже отмеченную галочку не отключаем — иначе её нельзя снять */
-			if (hasResult === false && box.checked === false && isSteam === false) {
+			const needDisable = (hasResult === false) && (box.checked === false) && (isSteam === false);
+
+			if (needDisable) {
 				box.disabled = true;
 				box.parentNode.classList.add("checkbox_disabled");
 			} else {
@@ -243,85 +195,69 @@ function updateAvailability() {
 	}
 }
 
-/* ---------- вывод товаров ---------- */
-
+/* Собирает HTML одной карточки товара. */
 function productCard(product) {
 	let html = '<article class="product-card">';
-	html += '<div class="product-card__media">';
-	html += '<img src="' + product.image + '" alt="' + product.name + '">';
-	html += "</div>";
-	html += '<div class="product-card__body">';
-	html += '<h3 class="product-card__name">' + product.name + "</h3>";
-	html += '<p class="product-card__description">' + product.description + "</p>";
-	html += '<ul class="product-card__meta">';
-	html += "<li>" + valueTitle(product.platform) + "</li>";
-	html += "<li>" + valueTitle(product.country) + "</li>";
-	html += "<li>" + product.nominal + "</li>";
-	html += "</ul>";
-	html += '<p class="product-card__rating">★ ' + product.rating.toFixed(1) + "</p>";
-	html += '<div class="product-card__bottom">';
-	html += '<p class="price">' + formatPrice(product.price);
+	html = html + '<div class="product-card__media">';
+	html = html + '<img src="' + product.image + '" alt="' + product.name + '">';
+	html = html + '</div>';
+	html = html + '<div class="product-card__body">';
+	html = html + '<h3 class="product-card__name">' + product.name + '</h3>';
+	html = html + '<p class="product-card__description">' + product.description + '</p>';
+	html = html + '<ul class="product-card__meta">';
+	html = html + '<li>' + valueTitle(product.platform) + '</li>';
+	html = html + '<li>' + valueTitle(product.country) + '</li>';
+	html = html + '<li>' + product.nominal + '</li>';
+	html = html + '</ul>';
+	html = html + '<p class="product-card__rating">★ ' + product.rating.toFixed(1) + '</p>';
+	html = html + '<div class="product-card__bottom">';
+	html = html + '<p class="price">' + formatPrice(product.price);
 
 	if (product.oldPrice) {
-		html += ' <s class="price__old">' + formatPrice(product.oldPrice) + "</s>";
+		html = html + ' <s class="price__old">' + formatPrice(product.oldPrice) + '</s>';
 	}
 
-	html += "</p>";
-	html += '<button class="button button_small" type="button" onclick="addToCart(\'' + product.id + '\')">В корзину</button>';
-	html += "</div>";
-	html += "</div>";
-	html += "</article>";
+	html = html + '</p>';
+	html = html + '<button class="button button_small" type="button" onclick="addToCart(\'' + product.id + '\')">В корзину</button>';
+	html = html + '</div>';
+	html = html + '</div>';
+	html = html + '</article>';
 	return html;
 }
 
+/* Выводит все подходящие товары и обновляет счётчик, блок Steam и сообщение о пустоте. */
 function renderProducts() {
 	const box = document.getElementById("catalogItems");
-	if (!box) {
-		return;
-	}
-
 	const list = filteredProducts();
 
 	let html = "";
 	for (let i = 0; i < list.length; i++) {
-		html += productCard(list[i]);
+		html = html + productCard(list[i]);
 	}
 	box.innerHTML = html;
 
-	/* Steam пополняется по логину: вместо карточек показываем форму */
-	const steamSelected = selected.platform.indexOf(steamValue) !== -1;
-
-	/* выбран только Steam — товаров в списке не будет */
-	let onlySteam = false;
-	if (steamSelected && selected.platform.length === 1) {
-		onlySteam = true;
-	}
+	const steamSelected = selected.platform.indexOf("steam") !== -1;
+	const onlySteam = steamSelected && selected.platform.length === 1;
 
 	const steamBlock = document.getElementById("steamBlock");
-	if (steamBlock) {
-		steamBlock.hidden = !steamSelected;
-	}
+	steamBlock.hidden = !steamSelected;
 
 	const counter = document.getElementById("catalogCount");
-	if (counter) {
-		if (onlySteam) {
-			counter.textContent = "Пополнение Steam";
-		} else {
-			counter.textContent = productsTitle(list.length);
-		}
+	if (onlySteam) {
+		counter.textContent = "Пополнение Steam";
+	} else {
+		counter.textContent = productsTitle(list.length);
 	}
 
 	const empty = document.getElementById("catalogEmpty");
-	if (empty) {
-		if (list.length === 0 && onlySteam === false) {
-			empty.hidden = false;
-		} else {
-			empty.hidden = true;
-		}
+	if (list.length === 0 && onlySteam === false) {
+		empty.hidden = false;
+	} else {
+		empty.hidden = true;
 	}
 }
 
-/* Пополнение Steam по логину */
+/* Обрабатывает форму пополнения Steam. */
 function initSteamForm() {
 	const form = document.getElementById("steamForm");
 	if (!form) {
@@ -340,38 +276,29 @@ function initSteamForm() {
 		const amount = document.getElementById("steamAmount").value;
 		const success = document.getElementById("steamSuccess");
 
-		success.textContent = "Заявка принята: пополним аккаунт " + login + " на " +
-			amount + " ₽ после подтверждения заказа.";
+		success.textContent = "Заявка принята: пополним аккаунт " + login +
+			" на " + amount + " ₽ после подтверждения заказа.";
 		success.hidden = false;
+
 		form.reset();
 	});
 }
 
-/* ---------- запуск ---------- */
-
-/* В адресе страницы могут быть параметры, например
-   catalog.html?platform=apple — тогда галочка уже стоит */
+/* Читает параметры из адреса (?platform=apple) и ставит галочки. */
 function readUrlParams() {
-	const search = window.location.search; /* строка вида "?platform=apple" */
-	if (search.length < 2) {
-		return;
-	}
+	const params = new URLSearchParams(window.location.search);
 
-	const parts = search.substring(1).split("&");
-
-	for (let i = 0; i < parts.length; i++) {
-		const pair = parts[i].split("=");
-		const key = pair[0];
-		const value = decodeURIComponent(pair[1] || "");
-
-		if (key === "platform" || key === "country" || key === "nominal") {
+	for (let i = 0; i < groups.length; i++) {
+		const key = groups[i].key;
+		const value = params.get(key);
+		if (value) {
 			selected[key] = [value];
 		}
 	}
 }
 
+/* Запускает каталог: строит фильтр, товары и подключает обработчики. */
 function initCatalog() {
-	/* если на странице нет каталога — ничего не делаем */
 	const items = document.getElementById("catalogItems");
 	if (!items) {
 		return;
@@ -382,57 +309,45 @@ function initCatalog() {
 	renderProducts();
 	updateAvailability();
 
-	/* Галочки и ползунок лежат внутри #filters, поэтому слушаем сам блок:
-	   при перерисовке фильтра обработчики не теряются.
-	   Проверяем, что блок вообще есть на странице. */
 	const filtersBox = document.getElementById("filters");
-	if (filtersBox) {
-		filtersBox.addEventListener("change", function (event) {
-			if (event.target.type === "checkbox") {
-				collectFilters();
-				renderProducts();
-				updateAvailability();
-			}
-		});
 
-		filtersBox.addEventListener("input", function (event) {
-			if (event.target.id !== "priceRange") {
-				return;
-			}
-
-			maxPrice = Number(event.target.value);
-			document.getElementById("priceValue").textContent = formatPrice(maxPrice);
+	filtersBox.addEventListener("change", function (event) {
+		if (event.target.type === "checkbox") {
+			collectFilters();
 			renderProducts();
 			updateAvailability();
-		});
-	}
+		}
+	});
+
+	filtersBox.addEventListener("input", function (event) {
+		if (event.target.id !== "priceRange") {
+			return;
+		}
+		maxPrice = Number(event.target.value);
+		document.getElementById("priceValue").textContent = formatPrice(maxPrice);
+		renderProducts();
+		updateAvailability();
+	});
 
 	const sort = document.getElementById("sortSelect");
-	if (sort) {
-		sort.addEventListener("change", function () {
-			sortMode = sort.value;
-			renderProducts();
-		});
-	}
+	sort.addEventListener("change", function () {
+		sortMode = sort.value;
+		renderProducts();
+	});
 
 	const reset = document.getElementById("resetFilters");
-	if (reset) {
-		reset.addEventListener("click", function () {
-			selected.platform = [];
-			selected.country = [];
-			selected.nominal = [];
-			maxPrice = maxPriceLimit;
-			sortMode = "popular";
+	reset.addEventListener("click", function () {
+		selected.platform = [];
+		selected.country = [];
+		selected.nominal = [];
+		maxPrice = MAX_PRICE;
+		sortMode = "popular";
+		sort.value = "popular";
 
-			if (sort) {
-				sort.value = "popular";
-			}
-
-			renderFilters();
-			renderProducts();
-			updateAvailability();
-		});
-	}
+		renderFilters();
+		renderProducts();
+		updateAvailability();
+	});
 }
 
 initCatalog();
