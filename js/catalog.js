@@ -267,7 +267,7 @@ function productCard(product) {
 	}
 
 	html += "</p>";
-	html += '<button class="button button_small" type="button" data-add="' + product.id + '">В корзину</button>';
+	html += '<button class="button button_small" type="button" onclick="addToCart(\'' + product.id + '\')">В корзину</button>';
 	html += "</div>";
 	html += "</div>";
 	html += "</article>";
