@@ -1,30 +1,22 @@
-/* Корзина товаров. Всё храним в localStorage. */
+/* Корзина. Всё хранится в localStorage. */
 
 const CART_KEY = "gamecard_cart";
 
-/* ---------- чтение и запись корзины ---------- */
+/* ---------- чтение и запись ---------- */
 
 function getCart() {
-	try {
-		const text = localStorage.getItem(CART_KEY);
-		if (text) {
-			return JSON.parse(text);
-		}
-	} catch (error) {
-		/* браузер запретил localStorage — корзина работать не будет */
+	const text = localStorage.getItem(CART_KEY);
+	if (!text) {
+		return {};
 	}
-	return {};
+	return JSON.parse(text);
 }
 
 function saveCart(cart) {
-	try {
-		localStorage.setItem(CART_KEY, JSON.stringify(cart));
-	} catch (error) {
-		alert("Браузер запрещает сохранять корзину. Открой сайт через Live Server (http), а не двойным щелчком по файлу.");
-	}
+	localStorage.setItem(CART_KEY, JSON.stringify(cart));
 }
 
-/* ---------- что можно делать с корзиной ---------- */
+/* ---------- действия с корзиной ---------- */
 
 function addToCart(id) {
 	const cart = getCart();
@@ -98,26 +90,6 @@ function cartTotal() {
 	return total;
 }
 
-function cartItemHtml(item) {
-	let html = '<li class="cart-item">';
-	html += '<img class="cart-item__image" src="' + item.product.image + '" alt="' + item.product.name + '">';
-	html += '<div class="cart-item__info">';
-	html += '<h3 class="cart-item__name">' + item.product.name + '</h3>';
-	html += '<p class="cart-item__meta">' + PLATFORMS[item.product.platform] + ' • ' +
-		COUNTRIES[item.product.country] + ' • ' + item.product.nominal + '</p>';
-	html += '<p class="cart-item__price">' + formatPrice(item.product.price) + '</p>';
-	html += '</div>';
-	html += '<div class="cart-item__controls">';
-	html += '<button class="qty-button" type="button" data-minus="' + item.product.id + '">−</button>';
-	html += '<span class="cart-item__count">' + item.count + '</span>';
-	html += '<button class="qty-button" type="button" data-plus="' + item.product.id + '">+</button>';
-	html += '</div>';
-	html += '<p class="cart-item__sum">' + formatPrice(item.sum) + '</p>';
-	html += '<button class="cart-item__remove" type="button" data-remove="' + item.product.id + '">Удалить</button>';
-	html += '</li>';
-	return html;
-}
-
 function renderCart() {
 	const list = document.getElementById("cartItems");
 	if (!list) {
@@ -135,48 +107,55 @@ function renderCart() {
 
 	if (items.length === 0) {
 		list.innerHTML = "";
-		if (empty) empty.hidden = false;
-		if (orderBlock) orderBlock.hidden = true;
+		empty.hidden = false;
+		orderBlock.hidden = true;
 		return;
 	}
 
-	if (empty) empty.hidden = true;
-	if (orderBlock) orderBlock.hidden = false;
+	empty.hidden = true;
+	orderBlock.hidden = false;
 
 	let html = "";
 	for (let i = 0; i < items.length; i++) {
-		html += cartItemHtml(items[i]);
+		const item = items[i];
+
+		html += '<li class="cart-item">';
+		html += '<img class="cart-item__image" src="' + item.product.image + '" alt="' + item.product.name + '">';
+		html += '<div class="cart-item__info">';
+		html += '<h3 class="cart-item__name">' + item.product.name + '</h3>';
+		html += '<p class="cart-item__meta">' + PLATFORMS[item.product.platform] + ' • ' +
+			COUNTRIES[item.product.country] + ' • ' + item.product.nominal + '</p>';
+		html += '<p class="cart-item__price">' + formatPrice(item.product.price) + '</p>';
+		html += '</div>';
+		html += '<div class="cart-item__controls">';
+		html += '<button class="qty-button" type="button" onclick="minusClick(\'' + item.product.id + '\')">−</button>';
+		html += '<span>' + item.count + '</span>';
+		html += '<button class="qty-button" type="button" onclick="plusClick(\'' + item.product.id + '\')">+</button>';
+		html += '</div>';
+		html += '<p class="cart-item__sum">' + formatPrice(item.sum) + '</p>';
+		html += '<button class="cart-item__remove" type="button" onclick="deleteClick(\'' + item.product.id + '\')">Удалить</button>';
+		html += '</li>';
 	}
 	list.innerHTML = html;
 }
 
-/* ---------- кнопки на странице корзины ---------- */
-
-function initCartButtons() {
-	const list = document.getElementById("cartItems");
-	if (!list) {
-		return;
-	}
-
-	list.addEventListener("click", function (event) {
-		const minus = event.target.closest("[data-minus]");
-		const plus = event.target.closest("[data-plus]");
-		const remove = event.target.closest("[data-remove]");
-
-		if (minus) {
-			changeQuantity(minus.dataset.minus, -1);
-			renderCart();
-		}
-		if (plus) {
-			changeQuantity(plus.dataset.plus, 1);
-			renderCart();
-		}
-		if (remove) {
-			removeFromCart(remove.dataset.remove);
-			renderCart();
-		}
-	});
+/* маленькие обработчики для кнопок внутри корзины */
+function minusClick(id) {
+	changeQuantity(id, -1);
+	renderCart();
 }
+
+function plusClick(id) {
+	changeQuantity(id, 1);
+	renderCart();
+}
+
+function deleteClick(id) {
+	removeFromCart(id);
+	renderCart();
+}
+
+/* ---------- форма заказа ---------- */
 
 function initOrderForm() {
 	const form = document.getElementById("orderForm");
@@ -187,7 +166,7 @@ function initOrderForm() {
 	form.addEventListener("submit", function (event) {
 		event.preventDefault();
 
-		if (form.checkValidity() === false) {
+		if (!form.checkValidity()) {
 			form.reportValidity();
 			return;
 		}
@@ -199,11 +178,9 @@ function initOrderForm() {
 		renderCart();
 
 		const success = document.getElementById("orderSuccess");
-		if (success) {
-			success.textContent = "Спасибо, " + name + "! Заказ №" + number +
-				" принят — код активации отправим в течение 5 минут.";
-			success.hidden = false;
-		}
+		success.textContent = "Спасибо, " + name + "! Заказ №" + number +
+			" принят — код активации отправим в течение 5 минут.";
+		success.hidden = false;
 
 		form.reset();
 	});
@@ -212,5 +189,4 @@ function initOrderForm() {
 /* ---------- запуск ---------- */
 
 renderCart();
-initCartButtons();
 initOrderForm();
